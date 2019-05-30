@@ -34,3 +34,18 @@ vignettes/*.pdf
 
 # Shiny token, see https://shiny.rstudio.com/articles/shinyapps.html
 rsconnect/
+
+# macOS
+.DS_Store
+.DS_store
+
+# No github
+data
+data_b.Rdata
+docs
+fits
+IMCN-learningtask
+old stuff
+paper
+pres
+RLDDM.docx
