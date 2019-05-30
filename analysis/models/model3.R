@@ -18,7 +18,7 @@ modelSpec = list('variablePars'=list('a' = 1,
 transformLearningRate <- function(pars, condition) {
   # "Declare"
   eta1 <- eta2 <- rep(pars[['eta1']], length(condition))
-    return(list(eta1=eta1, eta2=eta2))
+  return(list(eta1=eta1, eta2=eta2))
 }
 
 ### the following function gets trial-by-trial DDM pars
@@ -40,6 +40,5 @@ transformDDMPars <- function(pars, condition, delta_ev) {
   
   # a constant across cues
   a = rep(pars[['a']], nTrials)
-  }
   return(list(t0=t0, a=a, v=v, z=z, sz=sz, sv=sv, s=s))
 }
