@@ -1,23 +1,18 @@
-#### Plot the fits
-rm(list=ls())
+rm(list=ls())  # fresh start
+
+# Libraries ---------------------------------------------------------------
+.libPaths(c(.libPaths(), '/home/stevenm/rpackages')) # for tux server
 library(rtdists)
 library(DEoptim)
 library(RLDDM)
 
-modelType = 'RLDDM'
-plot <- TRUE
-savePlots <- TRUE
-
-# set some directories
+# Directories -------------------------------------------------------------
 dataDir <- '~/surfdrive/Testfolder/exp2'
 prepDataDir <- '~/surfdrive/data/learningTask/Barbara_preprocessed'
-workDir <- '/Users/steven/Sync/PhDprojects/RLDDMproj'
-source(file.path(workDir, 'old stuff/loadData.R'))
-source(file.path(workDir, 'old stuff/RLDDMfunctions.R'))
-source(file.path(workDir, 'old stuff/loadModel.R'))
-source(file.path(workDir, 'analysis/getParsRLDDM.R'))
-source(file.path(workDir, 'analysis/prepareForFitting.R'))
+workDir <- '/Users/steven/Sync/PhDprojects/RLDDM'
+source(file.path(workDir, 'analysis/fittingFunctions.R'))
 
+# What to plot? -----------------------------------------------------------
 exp <- 'exp2'
 resDir <- file.path(workDir, 'fits', 'Barbara', exp, paste0('model-', modelType))
 
@@ -25,37 +20,39 @@ resDir <- file.path(workDir, 'fits', 'Barbara', exp, paste0('model-', modelType)
 modelN <- 1
 load(file.path(prepDataDir, paste0('data_', exp, '.Rdata')))
 
-
 # Plot data ---------------------------------------------------------------
-allPps <- unique(dat$pp)
-pp <- allPps[2]
-df = dat[dat$pp==pp & dat$Block == 'Miniblocks',]
-df$choiceIsHighP[is.na(df$rt)] = FALSE
-# Data
-probs <- seq(0.1, .9, .2)
-par(mfrow=c(1,1), lwd=2)
-plot(0, 0, type='n', xlim=c(min(df$rt, na.rm=TRUE), max(df$rt, na.rm = TRUE)), ylim=c(0, 1), ylab='defective CDF', xlab='RT')
-for(cue in c('SPD', 'ACC')) {
-  choiceProb = mean(df$choiceIsHighP[df$Cue==cue])
-  qps1 = quantile(df$rt[df$Cue==cue & df$choiceIsHighP==TRUE], probs, na.rm=TRUE)
-  qps2 = quantile(df$rt[df$Cue==cue & df$choiceIsHighP==FALSE], probs, na.rm=TRUE)
-  lines(qps1, probs*(choiceProb), type='b', lty=ifelse(cue=='SPD', 2, 1), col=ifelse(cue=='SPD', 2, 1))
-  lines(qps2, probs*(1-choiceProb), type='b', lty=ifelse(cue=='SPD', 2, 1), col=ifelse(cue=='SPD', 2, 1))
-}
-legend('topright', c('SPD', 'ACC'), lty=c(2, 1), lwd=c(2,2), col=c(2, 1), bty='n', cex=1.2)
-
-
+# allPps <- unique(dat$pp)
+# pp <- allPps[2]
+# df = dat[dat$pp==pp & dat$Block == 'Miniblocks',]
+# df$choiceIsHighP[is.na(df$rt)] = FALSE
+# # Data
+# probs <- seq(0.1, .9, .2)
+# par(mfrow=c(1,1), lwd=2)
+# plot(0, 0, type='n', xlim=c(min(df$rt, na.rm=TRUE), max(df$rt, na.rm = TRUE)), ylim=c(0, 1), ylab='defective CDF', xlab='RT')
+# for(cue in c('SPD', 'ACC')) {
+#   choiceProb = mean(df$choiceIsHighP[df$Cue==cue])
+#   qps1 = quantile(df$rt[df$Cue==cue & df$choiceIsHighP==TRUE], probs, na.rm=TRUE)
+#   qps2 = quantile(df$rt[df$Cue==cue & df$choiceIsHighP==FALSE], probs, na.rm=TRUE)
+#   lines(qps1, probs*(choiceProb), type='b', lty=ifelse(cue=='SPD', 2, 1), col=ifelse(cue=='SPD', 2, 1))
+#   lines(qps2, probs*(1-choiceProb), type='b', lty=ifelse(cue=='SPD', 2, 1), col=ifelse(cue=='SPD', 2, 1))
+# }
+# legend('topright', c('SPD', 'ACC'), lty=c(2, 1), lwd=c(2,2), col=c(2, 1), bty='n', cex=1.2)
+# 
 
 # Plot RTs and learning -----------------------------------------------------------
-def.par <- par(no.readonly = TRUE) # save default, for resetting...
-nf <- layout(matrix(c(1,1,2,3), 2, 2, byrow = TRUE), respect = TRUE)
-layout.show(nf)
-par(mar=c(5, 4, 2, 2) + 0.1)
+def.par <- par(no.readonly = TRUE) # save default, for resetting layout
 all.sims.qps <- all.dat.qps <- list()
 for(pp in unique(dat$pp)) {
   # Plot Model --------------------------------------------------------------
   load(file.path(resDir, paste0('sub-', pp, '_model-', modelN, '_Miniblocks.rdat')))
   if(savePlots) pdf(file=file.path(resDir, paste0('sub-', pp, '_model-', modelN, '_Miniblocks_cdf.pdf')))
+  
+  # Layout
+  nf <- layout(matrix(c(1,1,2,3), 2, 2, byrow = TRUE), respect = TRUE)
+  layout.show(nf)
+  par(mar=c(5, 4, 2, 2) + 0.1)
+
+  # prepare data
   d = prepareForFitting(dat[dat$pp==pp&as.character(dat$Block)=='Miniblocks',]) 
   df=d$df
   outcomes=d$outcomes
@@ -64,7 +61,8 @@ for(pp in unique(dat$pp)) {
   choice=d$choice
   etaMax <- 1
   
-  modelSetup <- getBounds(modelN=modelN)
+  # Set-up
+  modelSetup <- setupModel(modelN=modelN)
   names(bestPars) <- modelSetup$parNames
   model <- objRLDDMMultiCond(bestPars, 
                              rt=df$rt,
@@ -210,3 +208,56 @@ arrows(x0=1:10, x1=1:10,
 legend('topright', c('Data', 'Model'), lty=c(2, 1), pch=c(1, NA),  bty='n')
 
 if(savePlots) dev.off()
+
+
+
+
+
+
+###### old stuff below
+# Plot learning -----------------------------------------------------------
+# if(savePlots) pdf(file=file.path(resDir, paste0('sub-', pp, '_model-', modelN, '_fit.pdf')), width=15, height=15)
+
+# par(mfrow=c(1,1), las=1)
+# plotPars <- list(bestPars)[[1]]
+# model <- objRLDDMMultiCond(plotPars, 
+#                            rt=df$rt,
+#                            parNames=modelSetup$parNames,
+#                            fixedPars=modelSetup$fixedPars,
+#                            choice=choice,
+#                            condition=df$cue,
+#                            values=values, 
+#                            outcomes=outcomes, 
+#                            VVchoiceIdx=VVchoiceIdx,
+#                            modelN=modelN,
+#                            returnType='full')
+# plotVV <- model$VV
+# par(mfcol=c(3,2), mar=c(3,4,3,2)+.1, lwd=2, cex=1.05)
+
+# palette(c('cornflowerblue', 'orchid'))
+# for(i in 1:length(unique(df$condition))) {
+#   idx <- df$condition==unique(df$condition)[i]
+#   # Value difference
+#   plotTrace(model$VV[idx,1]-model$VV[idx,2], 
+#             add=FALSE, ylab='Value difference', xlab='Trial n')
+#   abline(h=0, lty=2, col='grey')
+#   points(1:sum(idx), ifelse(df$choice[idx]==2, par()$usr[4], par()$usr[3]), pch=4, xpd=TRUE)
+#   
+#   # Prediction errors
+#   pes <- apply(model$PE, 1, sum, na.rm=TRUE)[idx]
+#   plotTrace(pes, 
+#             add=FALSE, ylab='Prediction errors', xlab='Trial n')
+#   plotTrace(pes)#*ifelse(pes>0, bestPars[['eta1']], bestPars[['eta2']]), add=TRUE, lwd=2, lty=2, col=2)
+#   abline(h=0, lty=2, col='grey')
+#   points(1:sum(idx), ifelse(df$choice[idx]==2, par()$usr[4], par()$usr[3]), pch=4, xpd=TRUE)
+#   
+#   # Probability of choosing upper bound
+#   plotTrace(model$PP[idx,1], ylim=c(0, 1),
+#             add=FALSE, ylab='Probability of "correct"', xlab='Trial n')
+#   abline(h=0.5, lty=2, col='grey')
+#   points(1:sum(idx), ifelse(df$choice[idx]==2, par()$usr[4], par()$usr[3]), pch=4, xpd=TRUE)
+#   plotRunningWindowChoice2(df$choice[idx]-1, binSize=10, lty=2, col='darkred', lwd=2)
+#   
+#   title(formatStr(c('eta1', 'eta2', 'beta'), plotPars, n.decimals=2), outer=TRUE, line=-1)
+# }
+# if(savePlots) dev.off()

@@ -45,7 +45,6 @@ prepareForFitting <- function(dat) {
 # Objective function ------------------------------------------------------
 objRLDDMMultiCond <- function(pars,
                               rt, choice, condition, outcomes, parNames,
-                              modelN,
                               values=c(0.5, 0.5), VVchoiceIdx, constants=NULL, 
                               returnType='full', min.like=1e-20,
                               backend = 'c') {
@@ -63,8 +62,7 @@ objRLDDMMultiCond <- function(pars,
   names(pars) <- parNames
   if(!is.null(constants)) for(i in 1:length(constants)) pars[[names(constants[i])]] <- constants[[i]]
   etas <- transformLearningRate(condition=condition, 
-                                pars=pars,
-                                modelN=modelN)
+                                pars=pars)
   
   # Update values trial-by-trial
   updated <- updateValuesFancy(outcomes, values, etas$eta1, etas$eta2)
@@ -76,7 +74,7 @@ objRLDDMMultiCond <- function(pars,
   EV_diff = VV_choice[,1] - VV_choice[,2]  # difference in expected value over trials
   
   # DDM choice function
-  ddmPars <- transformDDMPars(pars, condition, delta_ev=EV_diff, modelN=modelN)
+  ddmPars <- transformDDMPars(pars, condition, delta_ev=EV_diff)
   like <- ddiffusion(rt=rt, response=choice, 
                      a=ddmPars[['a']], 
                      v=ddmPars[['v']], 
@@ -91,7 +89,18 @@ objRLDDMMultiCond <- function(pars,
   }
   
   if(returnType=='full') {
-    PP <- pdiffusion(rt, response=rep(2, length(choice)), a=pars_l[['a']], v=EV_diff*pars[['m']], t0=pars[['t0']])
+    # pdiffusion requires the RTs to be ordered, so lets order
+    idx <- order(rt)
+    PP <- pdiffusion(rt[order(rt)], response=rep(2, length(choice)), 
+                     a=ddmPars[['a']][order(rt)], 
+                     v=ddmPars[['v']][order(rt)], 
+                     t0=ddmPars[['t0']][order(rt)],
+                     sz=ddmPars[['sz']][order(rt)],
+                     z=ddmPars[['z']][order(rt)]*ddmPars[['a']][order(rt)],
+                     sv=ddmPars[['sz']][order(rt)],
+                     s=ddmPars[['s']][order(rt)])
+    # and reverse order
+    PP <- PP[order(order(rt))]
     PE_choice = matrix(PE[VVchoiceIdx], ncol=2, byrow=TRUE)
     return(list(VV=VV_choice, VV_full=VV, LL=LL, PE_full=PE, PE=PE_choice))
   } else {
@@ -114,17 +123,17 @@ defaultBounds <- function() {
        's'=c(0, 5))
 }
 
-setupModel <- function(model, bounds=defaultBounds()) {
+model <- function(modelSetup, bounds=defaultBounds()) {
   # make p.vector
   p.vector <- c()
-  for(parName in names(model$variablePars)) {
-    valueInList = model$variablePars[[parName]]
+  for(parName in names(modelSetup$variablePars)) {
+    valueInList = modelSetup$variablePars[[parName]]
     if(valueInList == 1) {
       # intercept only
       p.vector <- c(p.vector, parName)
     } else {
       # dependent on condition
-      p.vector <- c(p.vector, paste(parName, model[[valueInList]], sep='.'))
+      p.vector <- c(p.vector, paste(parName, modelSetup[[valueInList]], sep='.'))
     }
   }
   
@@ -143,7 +152,7 @@ setupModel <- function(model, bounds=defaultBounds()) {
   return(list(p.vector=p.vector, 
               lowerBounds=lower,
               upperBounds=upper,
-              constants=model$constants))
+              constants=modelSetup$constants))
 }
 
 transformLearningRate <- function(pars, condition, modelN) {
