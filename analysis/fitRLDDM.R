@@ -25,16 +25,11 @@ for(exp in c('exp1', 'exp2', 'exp3')) {
   
   # Load data
   load(file.path(dataDir, paste0('data_', exp, '.Rdata')))
-  # very minor changes to data
-  dat$cue <- as.character(dat$cue)
-  dat[is.na(dat$cue), 'cue'] <- 'NEU'
-  dat$cue <- as.factor(dat$cue)
   ppsToFit <- unique(dat$pp)
-  
   
   for(block in c('Miniblocks', 'Trialwise')) {
     for(modelN in modelsToFit) {
-      # load model specification, and set-up  
+      # load model specification, and set-up
       source(file.path(workDir, 'analysis', 'models', paste0('model', modelN, '.R')))
       modelSetup <- model(modelSpec)
       
