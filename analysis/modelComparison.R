@@ -5,7 +5,7 @@ rm(list=ls())  # fresh start
 library(rtdists)
 library(DEoptim)
 library(RLDDM)
-fitModel <- '~/surfdrive/data/learningTask/Barbara_preprocessed'
+dataDir <- '~/surfdrive/data/learningTask/Barbara_preprocessed'
 workDir <- '/Users/steven/Sync/PhDprojects/RLDDM'
 
 # Model to fit -------------------------------------------------------------------
@@ -143,7 +143,7 @@ table(winningModels$BIC)
 table(winningModels$BIC)/sum(table(winningModels$BIC))
 
 
-#table(winningModels$AIC)
+# table(winningModels$AIC)
 
 
 

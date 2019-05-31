@@ -17,19 +17,22 @@ dir.create(resDir, showWarnings = FALSE, recursive=TRUE)
 
 # Optimization options ---------------------------------------------------------
 nCores <- 2
-# Load data
-load(file.path(dataDir, paste0('data_', exp, '.Rdata')))
-# very minor changes to data
-dat$cue <- as.character(dat$cue)
-dat[is.na(dat$cue), 'cue'] <- 'NEU'
-dat$cue <- as.factor(dat$cue)
-ppsToFit <- unique(dat$pp)
 modelsToFit <- 1:4
 
 
 # Start fitting loop ------------------------------------------------------
-for(modelN in modelsToFit) {
+for(exp in c('exp1', 'exp2', 'exp3')) {
+  # Load data
+  load(file.path(dataDir, paste0('data_', exp, '.Rdata')))
+  # very minor changes to data
+  dat$cue <- as.character(dat$cue)
+  dat[is.na(dat$cue), 'cue'] <- 'NEU'
+  dat$cue <- as.factor(dat$cue)
+  ppsToFit <- unique(dat$pp)
   
+  
+for(block in c('Miniblocks', 'Trialwise')) {
+for(modelN in modelsToFit) {
   # load model specification, and set-up  
   source(file.path(workDir, 'analysis', 'models', paste0('model', modelN, '.R')))
   modelSetup <- model(modelSpec)
@@ -37,7 +40,9 @@ for(modelN in modelsToFit) {
   # Loop over participants
   for(pp in ppsToFit) {
     # Prepare data for fitting
-    d = prepareForFitting(dat[dat$pp==pp&as.character(dat$Block)=='Miniblocks',]) 
+    thisPpDat <- dat[dat$pp==pp&as.character(dat$Block)==block,]
+    if(nrow(thisPpDat) == 0) next
+    d = prepareForFitting(thisPpDat)
     df=d$df
     outcomes=d$outcomes
     VVchoiceIdx=d$VVchoiceIdx
@@ -56,21 +61,21 @@ for(modelN in modelsToFit) {
     #                   parNames=modelSetup$p.vector, constants=modelSetup$constants)
 
     # Set-up output file name, check if previous fit exists
-    modelFn = file.path(resDir, paste0('sub-', pp, '_model-', modelN, '_Miniblocks.rdat'))
+    modelFn = file.path(resDir, paste0('sub-', pp, '_model-', modelN, '_', block, '.rdat'))
     if(file.exists(modelFn)) {
       load(modelFn)
       if(outDEoptim$optim$iter < 100) {
         # Continue from previous fit
         optimize = TRUE
-        start_pop = outDEoptim$member$pop
+        initialPop = outDEoptim$member$pop
       } else {
         # start new fit
         optimize = FALSE
-        start_pop = NULL
+        initialPop = NULL
       }
     } else {
       optimize = TRUE
-      start_pop = NULL
+      initialPop = NULL
     }
     if(optimize) {
       # Fit ---------------------------------------------------------------------
@@ -81,7 +86,8 @@ for(modelN in modelsToFit) {
           for (i in packages) library(i, character.only = TRUE)
         }
         parallel::clusterCall(cl, packFn, c('RLDDM', 'rtdists'))
-        parallel::clusterExport(cl, c('df', 'objRLDDMMultiCond', 
+        parallel::clusterExport(cl, c('df', 
+                                      'objRLDDMMultiCond', 
                                       'outcomes', 
                                       'transformDDMPars', 
                                       'transformLearningRate'))
@@ -94,8 +100,8 @@ for(modelN in modelsToFit) {
                             control=DEoptim.control(itermax=1000, 
                                                     parallelType = ifelse(nCores>1, 1, 0), 
                                                     cluster=cl,
-                                                    reltol=100, 
-                                                    initialpop = start_pop,
+                                                    step=100, 
+                                                    initialpop = initialPop,
                                                     parVar=c('df', 'objRLDDMMultiCond', 'outcomes', 
                                                              'transformDDMPars', 'transformLearningRate'),
                                                     packages = c('RLDDM', 'rtdists')), 
@@ -115,4 +121,5 @@ for(modelN in modelsToFit) {
     }
   }
 }
-
+}
+}

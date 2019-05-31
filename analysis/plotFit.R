@@ -1,23 +1,19 @@
 rm(list=ls())  # fresh start
 
-# Libraries ---------------------------------------------------------------
+# Libraries, directories ---------------------------------------------------------------
 .libPaths(c(.libPaths(), '/home/stevenm/rpackages')) # for tux server
 library(rtdists)
 library(DEoptim)
 library(RLDDM)
-
-# Directories -------------------------------------------------------------
-dataDir <- '~/surfdrive/Testfolder/exp2'
-prepDataDir <- '~/surfdrive/data/learningTask/Barbara_preprocessed'
+dataDir <- '~/surfdrive/data/learningTask/Barbara_preprocessed'
 workDir <- '/Users/steven/Sync/PhDprojects/RLDDM'
-source(file.path(workDir, 'analysis/fittingFunctions.R'))
 
 # What to plot? -----------------------------------------------------------
 exp <- 'exp2'
 resDir <- file.path(workDir, 'fits', 'Barbara', exp, paste0('model-', modelType))
 
 # single participant
-modelN <- 1
+#modelN <- 1
 load(file.path(prepDataDir, paste0('data_', exp, '.Rdata')))
 
 # Plot data ---------------------------------------------------------------
