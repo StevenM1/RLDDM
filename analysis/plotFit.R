@@ -1,20 +1,25 @@
 rm(list=ls())  # fresh start
 
 # Libraries, directories ---------------------------------------------------------------
-.libPaths(c(.libPaths(), '/home/stevenm/rpackages')) # for tux server
+source('./setup_locale.R') # gets dataDir, workDir
 library(rtdists)
 library(DEoptim)
 library(RLDDM)
-dataDir <- '~/surfdrive/data/learningTask/Barbara_preprocessed'
-workDir <- '/Users/steven/Sync/PhDprojects/RLDDM'
+source(file.path(workDir, 'analysis/src/fittingFunctions.R'))
+source(file.path(workDir, 'analysis/src/plottingFunctions.R'))
 
 # What to plot? -----------------------------------------------------------
-exp <- 'exp2'
+modelType <- 'RLDDM'
+modelN <- 1
+exp <- 'exp3'
+block <- 'Miniblocks'
+savePlots <- TRUE
 resDir <- file.path(workDir, 'fits', 'Barbara', exp, paste0('model-', modelType))
 
 # single participant
 #modelN <- 1
-load(file.path(prepDataDir, paste0('data_', exp, '.Rdata')))
+load(file.path(dataDir, paste0('data_', exp, '.Rdata')))
+allPps <- unique(dat$pp)
 
 # Plot data ---------------------------------------------------------------
 # allPps <- unique(dat$pp)
@@ -35,21 +40,25 @@ load(file.path(prepDataDir, paste0('data_', exp, '.Rdata')))
 # legend('topright', c('SPD', 'ACC'), lty=c(2, 1), lwd=c(2,2), col=c(2, 1), bty='n', cex=1.2)
 # 
 
+library(snowfall)
+sfInit(parallel=TRUE, cpus=10)
+sfLibrary(rtdists)
+
 # Plot RTs and learning -----------------------------------------------------------
 def.par <- par(no.readonly = TRUE) # save default, for resetting layout
 all.sims.qps <- all.dat.qps <- list()
 for(pp in unique(dat$pp)) {
   # Plot Model --------------------------------------------------------------
-  load(file.path(resDir, paste0('sub-', pp, '_model-', modelN, '_Miniblocks.rdat')))
-  if(savePlots) pdf(file=file.path(resDir, paste0('sub-', pp, '_model-', modelN, '_Miniblocks_cdf.pdf')))
+  load(file.path(resDir, paste0('sub-', pp, '_model-', modelN, '_', block, '.rdat')))
+  if(savePlots) pdf(file=file.path(resDir, paste0('sub-', pp, '_model-', modelN, '_', block, '_cdf.pdf')))
   
   # Layout
   nf <- layout(matrix(c(1,1,2,3), 2, 2, byrow = TRUE), respect = TRUE)
-  layout.show(nf)
+#  layout.show(nf)
   par(mar=c(5, 4, 2, 2) + 0.1)
 
   # prepare data
-  d = prepareForFitting(dat[dat$pp==pp&as.character(dat$Block)=='Miniblocks',]) 
+  d = prepareForFitting(dat[dat$pp==pp&as.character(dat$Block)==block,]) 
   df=d$df
   outcomes=d$outcomes
   VVchoiceIdx=d$VVchoiceIdx
@@ -58,35 +67,33 @@ for(pp in unique(dat$pp)) {
   etaMax <- 1
   
   # Set-up
-  modelSetup <- setupModel(modelN=modelN)
-  names(bestPars) <- modelSetup$parNames
-  model <- objRLDDMMultiCond(bestPars, 
+  source(file.path(workDir, 'analysis', 'models', paste0('model', modelN, '.R')))
+  modelSetup <- model(modelSpec)
+  names(bestPars) <- modelSetup$p.vector
+  fitModel <- objRLDDMMultiCond(bestPars, 
                              rt=df$rt,
-                             parNames=modelSetup$parNames,
-                             fixedPars=modelSetup$fixedPars,
+                             parNames=modelSetup$p.vector,
+                             constants=modelSetup$constants,
                              choice=choice,
                              condition=df$cue,
                              values=values, 
                              outcomes=outcomes, 
                              VVchoiceIdx=VVchoiceIdx,
-                             modelN=modelN,
                              returnType='full')
-  at0m = getPars(condition = df$cue, modelN = modelN, pars=bestPars)
-  pars.by.trial <- list(v=at0m[['m']]*(model$VV[,1]-model$VV[,2]),
-                        a=at0m[['a']], t0=at0m[['t0']], z=at0m[['a']]*.5, s=1)
+  for(i in 1:length(modelSetup$constants)) bestPars[[names(modelSetup$constants[i])]] <- modelSetup$constants[[i]]
+  ddmpars = transformDDMPars(condition = df$cue, pars=bestPars, delta_ev=fitModel$VV[,1]-fitModel$VV[,2])
   cat('simulating', sep='')
   quants <- c(.1, .3, .5, .7, .9)
   
-  library(snowfall)
-  sfInit(parallel=TRUE, cpus=4)
-  sfLibrary(rtdists)
   sfExportAll()
   sims.qps <- sfLapply(1:100, function(x) {
     cat('.', sep='')
     simdat <- rdiffusion(n=nrow(df), 
-                         a=pars.by.trial[['a']], 
-                         v=pars.by.trial[['v']], 
-                         z=pars.by.trial[['z']], s=pars.by.trial[['s']], t0=pars.by.trial[['t0']])
+                         a=ddmpars[['a']], 
+                         v=ddmpars[['v']], 
+                         z=ddmpars[['z']], 
+                         s=ddmpars[['s']], 
+                         t0=ddmpars[['t0']])
     qps1 <- quantile(simdat[simdat$response=='upper','rt'], quants)
     qps2 <- quantile(simdat[simdat$response=='lower','rt'], quants)
     simdat$trialN <- 1:nrow(simdat)
@@ -103,8 +110,7 @@ for(pp in unique(dat$pp)) {
          'rtByBin'=rtByBin[,2], 
          'accByBin'=accByBin[,2])
   })
-  sfStop()
-  
+
   qps1 <- quantile(df$rt[choice==2], quants)
   qps2 <- quantile(df$rt[choice==1], quants)
   df$trialN <- 1:nrow(df)
@@ -125,7 +131,10 @@ for(pp in unique(dat$pp)) {
   dat.qps$rtByBin = rtByBin[,2]
   dat.qps$accByBin = accByBin[,2]
   all.dat.qps[[pp]] = dat.qps
-  
+  if(is.na(xlim.max)) {
+    warning('xlim.max could not be determined')
+    xlim.max = 1
+  }
   plot(0, 0, type='n', xlim=c(0, xlim.max), ylim=c(0, ylim.max), xlab='RT', ylab='Def. prob.')
   abline(v=seq(0, 10, .25), lty='dotted', col='grey')
   abline(h=seq(0, 1, .1), lty='dotted', col='grey')
@@ -155,6 +164,7 @@ for(pp in unique(dat$pp)) {
   legend('topright', c('Data', 'Model'), lty=c(2, 1), pch=c(1, NA),  bty='n')
   if(savePlots) dev.off()
 }
+sfStop()
 
 # overall
 
@@ -174,7 +184,9 @@ all.dat.qps.means = list('r1' = list(qps=apply(t(sapply(all.dat.qps, function(x)
                          'sdRtByBin' = apply(sapply(all.dat.qps, function(x) x$rtByBin), 1, sd),
                          'meanAccByBin' = apply(sapply(all.dat.qps, function(x) x$accByBin), 1, mean),
                          'sdAccByBin' = apply(sapply(all.dat.qps, function(x) x$accByBin), 1, sd))
-if(savePlots) pdf(file=file.path(resDir, paste0('sub-ALL_model-', modelN, '_Miniblocks_cdf.pdf')))
+if(savePlots) pdf(file=file.path(resDir, paste0('sub-ALL_model-', modelN, '_', block, '_cdf.pdf')))
+nf <- layout(matrix(c(1,1,2,3), 2, 2, byrow = TRUE), respect = TRUE)
+par(mar=c(5, 4, 2, 2) + 0.1)
 plot(0, 0, type='n', xlim=c(0, xlim.max), ylim=c(0, ylim.max), xlab='RT', ylab='Def. prob.')
 abline(v=seq(0, 10, .25), lty='dotted', col='grey')
 abline(h=seq(0, 1, .1), lty='dotted', col='grey')
@@ -186,7 +198,7 @@ legend('bottomright', c('Data', 'Model'), lty=c(3, 1), lwd=c(3,2), pch=c(1, 4), 
 title(main=paste('Across subjects'))
 
 # rt by bin
-plot(x=1:10, y=all.sims.qps.means$rtByBin, type='l', ylim=c(0.5, .8), xlab='Trial (binned)', ylab='Mean RT')
+plot(x=1:10, y=all.sims.qps.means$rtByBin, type='l', ylim=c(0.4, .7), xlab='Trial (binned)', ylab='Mean RT')
 lines(x=1:10, y=all.dat.qps.means$meanRtByBin, type='b')
 arrows(x0=1:10, x1=1:10, 
        y0=all.dat.qps.means$meanRtByBin-(all.dat.qps.means$sdRtByBin)/sqrt(length(allPps)), 
@@ -204,56 +216,3 @@ arrows(x0=1:10, x1=1:10,
 legend('topright', c('Data', 'Model'), lty=c(2, 1), pch=c(1, NA),  bty='n')
 
 if(savePlots) dev.off()
-
-
-
-
-
-
-###### old stuff below
-# Plot learning -----------------------------------------------------------
-# if(savePlots) pdf(file=file.path(resDir, paste0('sub-', pp, '_model-', modelN, '_fit.pdf')), width=15, height=15)
-
-# par(mfrow=c(1,1), las=1)
-# plotPars <- list(bestPars)[[1]]
-# model <- objRLDDMMultiCond(plotPars, 
-#                            rt=df$rt,
-#                            parNames=modelSetup$parNames,
-#                            fixedPars=modelSetup$fixedPars,
-#                            choice=choice,
-#                            condition=df$cue,
-#                            values=values, 
-#                            outcomes=outcomes, 
-#                            VVchoiceIdx=VVchoiceIdx,
-#                            modelN=modelN,
-#                            returnType='full')
-# plotVV <- model$VV
-# par(mfcol=c(3,2), mar=c(3,4,3,2)+.1, lwd=2, cex=1.05)
-
-# palette(c('cornflowerblue', 'orchid'))
-# for(i in 1:length(unique(df$condition))) {
-#   idx <- df$condition==unique(df$condition)[i]
-#   # Value difference
-#   plotTrace(model$VV[idx,1]-model$VV[idx,2], 
-#             add=FALSE, ylab='Value difference', xlab='Trial n')
-#   abline(h=0, lty=2, col='grey')
-#   points(1:sum(idx), ifelse(df$choice[idx]==2, par()$usr[4], par()$usr[3]), pch=4, xpd=TRUE)
-#   
-#   # Prediction errors
-#   pes <- apply(model$PE, 1, sum, na.rm=TRUE)[idx]
-#   plotTrace(pes, 
-#             add=FALSE, ylab='Prediction errors', xlab='Trial n')
-#   plotTrace(pes)#*ifelse(pes>0, bestPars[['eta1']], bestPars[['eta2']]), add=TRUE, lwd=2, lty=2, col=2)
-#   abline(h=0, lty=2, col='grey')
-#   points(1:sum(idx), ifelse(df$choice[idx]==2, par()$usr[4], par()$usr[3]), pch=4, xpd=TRUE)
-#   
-#   # Probability of choosing upper bound
-#   plotTrace(model$PP[idx,1], ylim=c(0, 1),
-#             add=FALSE, ylab='Probability of "correct"', xlab='Trial n')
-#   abline(h=0.5, lty=2, col='grey')
-#   points(1:sum(idx), ifelse(df$choice[idx]==2, par()$usr[4], par()$usr[3]), pch=4, xpd=TRUE)
-#   plotRunningWindowChoice2(df$choice[idx]-1, binSize=10, lty=2, col='darkred', lwd=2)
-#   
-#   title(formatStr(c('eta1', 'eta2', 'beta'), plotPars, n.decimals=2), outer=TRUE, line=-1)
-# }
-# if(savePlots) dev.off()

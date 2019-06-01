@@ -1,12 +1,10 @@
 rm(list=ls())  # fresh start
 
 # Libraries, directories ---------------------------------------------------------------
-.libPaths(c(.libPaths(), '/home/stevenm/rpackages')) # for tux server
+source('./setup_locale.R') # gets dataDir, workDir, dependent on server
 library(rtdists)
 library(DEoptim)
 library(RLDDM)
-dataDir <- '~/surfdrive/data/learningTask/Barbara_preprocessed'
-workDir <- '/Users/steven/Sync/PhDprojects/RLDDM'
 
 # Model to fit -------------------------------------------------------------------
 modelType = 'RLDDM'
@@ -15,17 +13,11 @@ exp <- 'exp3'
 resDir <- file.path(workDir, 'fits', 'Barbara', exp, paste0('model-', modelType))
 dir.create(resDir, showWarnings = FALSE, recursive=TRUE)
 
-# Optimization options ---------------------------------------------------------
-nCores <- 2
 # Load data
 load(file.path(dataDir, paste0('data_', exp, '.Rdata')))
-# very minor changes to data
-dat$cue <- as.character(dat$cue)
-dat[is.na(dat$cue), 'cue'] <- 'NEU'
-dat$cue <- as.factor(dat$cue)
+block <- 'Trialwise'
 ppsToFit <- unique(dat$pp)
 modelsToFit <- 1:4
-
 
 # Collect all parameters --------------------------------------------------
 ## Get all parameters, mean RT and mean accuracy into single dataframe
@@ -33,13 +25,15 @@ fit <- data.frame(expand.grid(pp=ppsToFit, modelN=modelsToFit, cue=c('SPD', 'ACC
                   eta1=NA, eta2=NA, a=NA, t0=NA, m=NA, mrt=NA, accObjective=NA, accSubjective=NA, 
                   negLL=NA, nPars=NA, nObs=NA, BIC=NA, minBIC=NA, wBIC=NA, AIC=NA, minAIC=NA, wAIC=NA)
 
-for(modelN in 1:4) {
+for(modelN in modelsToFit) {
   source(file.path(workDir, 'analysis', 'models', paste0('model', modelN, '.R')))
   modelSetup <- model(modelSpec)
   
   for(pp in ppsToFit) {
     # load data
-    d = prepareForFitting(dat[dat$pp==pp&as.character(dat$Block)=='Miniblocks',]) 
+    thisPpDat <- dat[dat$pp==pp&as.character(dat$Block)==block,]
+    if(nrow(thisPpDat) == 0) next
+    d = prepareForFitting(thisPpDat)    
     df=d$df
     outcomes=d$outcomes
     VVchoiceIdx=d$VVchoiceIdx
@@ -47,7 +41,7 @@ for(modelN in 1:4) {
     choice=d$choice
 
     # load model
-    modelFn = file.path(resDir, paste0('sub-', pp, '_model-', modelN, '_Miniblocks.rdat'))
+    modelFn = file.path(resDir, paste0('sub-', pp, '_model-', modelN, '_', block, '.rdat'))
     load(modelFn)
     names(bestPars) <- modelSetup$p.vector
     fitModel <- objRLDDMMultiCond(bestPars,
@@ -80,6 +74,7 @@ for(modelN in 1:4) {
       fit[idx1&fit$cue==cue, 'accSubjective'] <- accSubjective[accSubjective$cue==cue, 'accuracySubjective']
     }
     
+    # get LL and parameters
     fit[idx1, 'negLL'] <- -fitModel$LL
     names(bestPars) <- modelSetup$p.vector
     fit[idx1, 't0'] <- bestPars[['t0']]
@@ -89,50 +84,37 @@ for(modelN in 1:4) {
       fit[idx1, 'eta1'] <- bestPars[['eta1']]
       fit[idx1&fit$cue=='SPD', 'a'] <- bestPars[['a.SPD']]
       fit[idx1&fit$cue=='ACC', 'a'] <- bestPars[['a.ACC']]
-      #      fit[idx1&fit$cue=='NEU', 'a'] <- bestPars[['a.NEU']]
     } else if(modelN == 2) {
       fit[idx1, 'a'] <- bestPars[['a']]
       fit[idx1&fit$cue=='SPD', 'eta1'] <- bestPars[['eta1.SPD']]
       fit[idx1&fit$cue=='ACC', 'eta1'] <- bestPars[['eta1.ACC']]
-      #      fit[idx1&fit$cue=='NEU', 'eta1'] <- bestPars[['eta1.NEU']]
     } else if(modelN == 3) {
       fit[idx1, 'a'] <- bestPars[['a']]
       fit[idx1, 'eta1'] <- bestPars[['eta1']]
     } else if(modelN == 4) {
       fit[idx1&fit$cue=='SPD', 'a'] <- bestPars[['a.SPD']]
       fit[idx1&fit$cue=='ACC', 'a'] <- bestPars[['a.ACC']]
-      #      fit[idx1&fit$cue=='NEU', 'a'] <- bestPars[['a.NEU']]
       fit[idx1&fit$cue=='SPD', 'eta1'] <- bestPars[['eta1.SPD']]
       fit[idx1&fit$cue=='ACC', 'eta1'] <- bestPars[['eta1.ACC']]
-      #      fit[idx1&fit$cue=='NEU', 'eta1'] <- bestPars[['eta1.NEU']]
     }
     fit[idx1, 'BIC'] <- 2*fit[idx1, 'negLL'] + log(fit[idx1, 'nObs'])*fit[idx1, 'nPars']
     fit[idx1, 'AIC'] <- 2*fit[idx1, 'negLL'] + 2*fit[idx1, 'nPars']
-    # fit[idx1, 'minBIC'] <- fit[idx1, 'BIC']-min(fit[idx1, 'BIC'])
   }
 }
 
 
-
-
-
-###
-### only if fit on single block
-#fit[fit$modelN %in% c(1,2), 'nPars'] <- fit[fit$modelN %in% c(1,2), 'nPars']-1
-#fit[fit$modelN==4, 'nPars'] <- fit[fit$modelN==4, 'nPars']-2
-
-fitWide = reshape(data=fit,#[fit$modelN!=3,],
+### reshape into wide format
+fitWide = reshape(data=fit,
                   v.names=c('eta1', 'eta2', 'a', 't0', 'm', 'mrt', 'accObjective', 'accSubjective'), 
                   direction='wide', idvar = c('pp', 'modelN'), timevar=c('cue'))
+fitWide <- fitWide[fitWide$pp!=59,]  # remove sub 59 (experiment crashed)
 for(pp in fitWide$pp) {
   idx <- fitWide$pp==pp
   fitWide[idx, 'minBIC'] = fitWide[idx, 'BIC'] - min(fitWide[idx, 'BIC'])
   fitWide[idx, 'minAIC'] = fitWide[idx, 'AIC'] - min(fitWide[idx, 'AIC'])
 }
 
-fitWide[fitWide$minBIC==0, 'modelN']
-fitWide[fitWide$minAIC==0, 'modelN']
-
+### find winning models
 winningModels <- data.frame(pp=unique(fitWide$pp), BIC=NA, AIC=NA, nObs=NA)
 for(pp in fitWide$pp) {
   winningModels[winningModels$pp==pp, 'BIC'] = fitWide[fitWide$pp==pp & fitWide$minBIC==0, 'modelN']
