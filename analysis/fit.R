@@ -37,7 +37,7 @@ fitSingleSubWrapper <- function(pp, dat, modelSetup, modelN, resDir, block,
     outDEoptim <- NULL
   }
   
-  outDEoptim <- fitSingleSub(dat, modelSetup, outDEoptim=outDEoptim, nCores=1)
+  outDEoptim <- fitSingleSub(thisSubDat, modelSetup, outDEoptim=outDEoptim, nCores=1)
   bestPars <- outDEoptim$optim$bestmem
   names(bestPars) <- modelSetup$p.vector
   save(df, outDEoptim, bestPars, modelSetup, transformChoicePars, transformLearningRate, file=outputFn)
@@ -156,7 +156,7 @@ for(exp in exps) {
         library(snowfall)
         sfInit(cpus = nCores, parallel = TRUE)
         sfExportAll()
-        for(package.name in c('rtdists', 'RLDDM', 'SuppDists', 'DEoptim')) sfLibrary(package.name, lib.loc='/home/stevenm/rpackages', character.only = TRUE)
+        for(package.name in c('rtdists', 'RLDDM', 'SuppDists', 'DEoptim')) sfLibrary(package.name, lib.loc=lib.loc, character.only = TRUE)
         sfLapply(ppsToFit, function(x) fitSingleSubWrapper(pp = x, 
                                                            dat = dat, 
                                                            block = block, 
