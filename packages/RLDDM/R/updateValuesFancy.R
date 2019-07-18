@@ -1,4 +1,4 @@
-updateValuesFancy <- function(outcomes, values, eta1, eta2) {
+updateValuesFancy <- function(outcomes, values, eta1, eta2, learningRule='SARSA') {
   
   nTrials <- nrow(outcomes)
   nChoices <- ncol(outcomes)
@@ -12,7 +12,14 @@ updateValuesFancy <- function(outcomes, values, eta1, eta2) {
   # initialize here in R, because we need these values
   VV <- PE <- matrix(nrow=nTrials, ncol=nChoices)
   
-  out = .C('doubleUpdateValuesCMC',
+  if(learningRule == 'SARSA') {
+    cFuncName <- 'doubleUpdateValuesSARSA'
+  } else if(learningRule == 'Qlearning') {
+    cFuncName <- 'doubleUpdateValuesQlearning'
+  } else {
+    stop('Learning rule not understood')
+  }
+  out = .C(cFuncName,
            nTrials=nTrials,
            nChoices=nChoices,
            values=as.double(values),
@@ -29,7 +36,7 @@ updateValuesFancy <- function(outcomes, values, eta1, eta2) {
 
 
 # test
-compareCvsR <- function(choice, outcomes, values, eta1, eta2) {
+compareCvsR <- function(choice, outcomes, values, eta1, eta2, learningRule='SARSA') {
   library(zoo)
 
   nt <- length(choice)  # number of trials
@@ -38,7 +45,7 @@ compareCvsR <- function(choice, outcomes, values, eta1, eta2) {
   values <- c(.5, .5)
 
   # C
-  updated <- updateValuesFancy(outcomes=outcomes, values=values, eta1, eta2)
+  updated <- updateValuesFancy(outcomes=outcomes, values=values, eta1, eta2, learningRule=learningRule)
   C.VV <- updated$VV
   C.PE <- updated$PE
 
@@ -58,33 +65,39 @@ compareCvsR <- function(choice, outcomes, values, eta1, eta2) {
     R.VV[trial, c_] = values[c_]
     R.VV[trial, -c_] = values[-c_]
     
+    if(learningRule == 'SARSA') {
+      predicted <- values[c_]
+    } else if(learningRule == 'Qlearning')  {
+      predicted <- max(values)
+    }
     # calculate PE
-    dv = o_-values[c_]  # prediction error = outcome (reward) - predicted value
+    dv = o_-predicted  # prediction error = outcome (reward) - predicted value
     R.PE[trial] <- dv  # keep track of this
     
     # update values
     values[c_] = values[c_] + ifelse(dv>0, eta1, eta2)*dv
   }
   
-
   # forward fill NAs
   all(R.VV==C.VV)
 }
 
+
 # 
-# test
+## test
 # nTrials <- 20
 # notChosen <- sample(c(1, 2), size=nTrials, replace=TRUE)
 # eta1 <- .3
 # eta2 <- .4
 # values <- c(.5, .5)
-# outcome <- matrix(rnorm(nTrials*2, 0, 3), nrow=nTrials)
+# outcome <- matrix(rnorm(nTrials*2, 5, 3), nrow=nTrials)
 # outcome[cbind(1:nTrials, as.numeric(notChosen))] <- NA
-
-# tmp = updateValuesFancy(outcomes=outcome, values=values, eta1, eta2)
 # 
-
-#
+# tmpSarsa = updateValuesFancy(outcomes=outcome, values=values, eta1, eta2, learningRule='SARSA')
+# tmpQ = updateValuesFancy(outcomes=outcome, values=values, eta1, eta2, learningRule='Qlearning')
+# tmpSarsa
+# tmpQ
+# 
 # #debug(compareCvsR)
-# compareCvsR(ifelse(notChosen==1, 2, 1), outcome, values, eta1, eta2)
-# 
+# compareCvsR(ifelse(notChosen==1, 2, 1), outcome, values, eta1, eta2, learningRule="Qlearning")
+

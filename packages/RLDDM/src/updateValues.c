@@ -132,13 +132,13 @@ void tester(double *VV, int *nrow, int *ncol) {
 */
 
 /// CMC = updateValues in C for multiple choice
-void doubleUpdateValuesCMC(int *nTrials, int *nChoices,
-                           double *values,
-                           double *VV, // of length ntrials*n_pairs
-                           double *PE,
-                           double *outcome,
-                           double *eta1, 
-                           double *eta2) {
+void doubleUpdateValuesQlearning(int *nTrials, int *nChoices,
+                                 double *values,
+                                 double *VV, // of length ntrials*n_pairs
+                                 double *PE,
+                                 double *outcome,
+                                 double *eta1, 
+                                 double *eta2) {
   // nTrials: number of trials
   // nChoices: total number of choice options. For example, 3 pairs of 2 stimuli = 6 choices
   // values: initial value of each choice option (length nChoices)
@@ -154,6 +154,8 @@ void doubleUpdateValuesCMC(int *nTrials, int *nChoices,
   int mat_idx = 0;
   int nt = *nTrials;
   int nc = *nChoices;
+  int otherChoiceAlternative;
+  double optimalQ;
   static double dv[64] = {0};   // WARNING: MAXIMUM NUMBER OF CHOICES IS FIXED HERE TO 64. Anything more will crash.
 
   // Loop over trials i
@@ -171,12 +173,75 @@ void doubleUpdateValuesCMC(int *nTrials, int *nChoices,
       // If the outcome for this choice was not NA, update (note that o_ == o_ returns FALSE if o_ is NA)
       if(outcome[mat_idx] == outcome[mat_idx]) {
 //        printf("Outcome is: %.3f, this is NOT NA!\n", outcome[mat_idx]);
-        dv[ch] = outcome[mat_idx] - values[ch];  // prediction error dv = outcome - value
+        
+        // Find "other" choice option in this state
+        otherChoiceAlternative = (ch % 2 == 0) ? ch+1 : ch-1;  // even columns -> alternative =+ id+1
+        
+        // find optimal policy
+        optimalQ = (values[ch] > values[otherChoiceAlternative]) ? values[ch] : values[otherChoiceAlternative];
+//        printf("Value of choice is: %.3f\n", values[ch]);
+//        printf("Value of non-choice is: %.3f\n", values[otherChoiceAlternative]);
+ //       printf("max Q is: %.3f\n", optimalQ);
+        
+        dv[ch] = outcome[mat_idx] - optimalQ;  // prediction error dv = outcome action - optimalQ
         PE[mat_idx] = dv[ch];  // offload PE
         
         // Do we update with eta1 or eta2?
         updateValue = dv[ch] > 0 ? this_eta1 : this_eta2;  // Ternary expression  (if-else in a one-liner)
   
+        values[ch] = values[ch] + updateValue*dv[ch];  // Update value
+      }
+    }
+  }
+}
+
+
+/// CMC = updateValues in C for multiple choice
+void doubleUpdateValuesSARSA(int *nTrials, int *nChoices,
+                             double *values,
+                             double *VV, // of length ntrials*n_pairs
+                             double *PE,
+                             double *outcome,
+                             double *eta1, 
+                             double *eta2) {
+  // nTrials: number of trials
+  // nChoices: total number of choice options. For example, 3 pairs of 2 stimuli = 6 choices
+  // values: initial value of each choice option (length nChoices)
+  // VV: output for trial-by-trial values of each choice option. In R, a matrix of size (nTrials, nChoices); here in C, an array of length (nTrials*nChoices)
+  // PE: output for trial-by-trial prediction errors for each choie option. Identical size as VV
+  // outcome: (nTrials, nChoices): trial by trial outcomes per choice option. NA is no output.
+  // eta1, eta2: floats with the learning rates (positive and negative, respectively)
+  
+  // declare some variables
+  double updateValue;
+  double this_eta1 = 0;
+  double this_eta2 = 0;
+  int mat_idx = 0;
+  int nt = *nTrials;
+  int nc = *nChoices;
+  static double dv[64] = {0};   // WARNING: MAXIMUM NUMBER OF CHOICES IS FIXED HERE TO 64. Anything more will crash.
+  
+  // Loop over trials i
+  for(unsigned int i = 0; i < nt; i++) {
+    //    printf("Trial N: %d\n", i);
+    this_eta1 = eta1[i];  // trialwise learning rate for positive PE
+    this_eta2 = eta2[i];  // trialwise learning rate for negative PE
+    
+    // Loop over choice alternatives
+    for(unsigned int ch = 0; ch < nc; ch++) {
+      //      printf("Choice option: %d\n", ch);
+      mat_idx = nt*ch+i;  // Where in the VV-matrix and outcome-matrix are we?
+      VV[mat_idx] = values[ch]; // Offload current values
+      
+      // If the outcome for this choice was not NA, update (note that o_ == o_ returns FALSE if o_ is NA)
+      if(outcome[mat_idx] == outcome[mat_idx]) {
+        //        printf("Outcome is: %.3f, this is NOT NA!\n", outcome[mat_idx]);
+        dv[ch] = outcome[mat_idx] - values[ch];  // prediction error dv = outcome choice - value of choice
+        PE[mat_idx] = dv[ch];  // offload PE
+        
+        // Do we update with eta1 or eta2?
+        updateValue = dv[ch] > 0 ? this_eta1 : this_eta2;  // Ternary expression  (if-else in a one-liner)
+        
         values[ch] = values[ch] + updateValue*dv[ch];  // Update value
       }
     }
