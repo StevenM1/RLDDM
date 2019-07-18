@@ -18,8 +18,6 @@ modelSpec = list('variablePars'=list('a' = 1,
                  'learningRule'='SARSA',
                  'choiceFunction'='DDM')
 
-#obj <- objRLDDMMultiCond
-
 ### transformLearningRate is a function transforming
 ### "global" parameters to trial-by-trial values, dependent 
 ### on the condition

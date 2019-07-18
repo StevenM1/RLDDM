@@ -17,8 +17,6 @@ modelSpec = list('variablePars'=list('B' = 1,
                  'learningRule'='Qlearning',
                  'choiceFunction'='RW')
 
-#obj <- objRLRWMultiCond
-
 ### transformLearningRate is a function transforming
 ### "global" parameters to trial-by-trial values, dependent 
 ### on the condition
@@ -28,9 +26,9 @@ transformLearningRate <- function(pars, condition) {
   return(list(eta1=eta1, eta2=eta2))
 }
 
-### the following function gets trial-by-trial DDM pars
+### the following function gets trial-by-trial choice pars
 transformChoicePars <- function(pars, condition, ev) {
-  ### Gets trial-by-trial DDM parameters ###
+  ### Gets trial-by-trial choice parameters ###
   nTrials = length(condition)
   B <- t0 <- A <- m <- rep(NA, nTrials)
   
@@ -42,9 +40,7 @@ transformChoicePars <- function(pars, condition, ev) {
   
   # Accumulating advantages (Van Ravenzwaaij paper)
   b0 <- rep(pars[['b0']], nTrials)
-  # b0[condition=='SPD'] <- pars[['b0.SPD']]
-  # b0[condition=='ACC'] <- pars[['b0.ACC']]
-  
+
   v1 = b0 + pars[['b1']]*(ev[,1]-ev[,2])
   v2 = b0 + pars[['b1']]*(ev[,2]-ev[,1])
   

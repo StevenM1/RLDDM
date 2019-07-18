@@ -14,8 +14,6 @@ modelSpec = list('variablePars'=list('beta' = 1,
                  'learningRule'='Qlearning',
                  'choiceFunction'='SM')
 
-#obj <- objSoftmaxMultiCond
-
 ### transformLearningRate is a function transforming
 ### "global" parameters to trial-by-trial values, dependent 
 ### on the condition
@@ -25,7 +23,7 @@ transformLearningRate <- function(pars, condition) {
   return(list(eta1=eta1, eta2=eta2))
 }
 
-### the following function gets trial-by-trial DDM pars
+### the following function gets trial-by-trial choice pars
 transformChoicePars <- function(pars, condition, ...) {
   ### Gets trial-by-trial beta parameters ###
   nTrials = length(condition)

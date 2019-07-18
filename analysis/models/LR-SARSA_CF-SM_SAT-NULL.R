@@ -14,8 +14,6 @@ modelSpec = list('variablePars'=list('beta' = 1,
                  'learningRule'='SARSA',
                  'choiceFunction'='SM')
 
-#obj <- objSoftmaxMultiCond
-
 ### transformLearningRate is a function transforming
 ### "global" parameters to trial-by-trial values, dependent 
 ### on the condition
