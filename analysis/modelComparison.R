@@ -7,17 +7,17 @@ library(DEoptim)
 library(RLDDM)
 
 # Model to fit -------------------------------------------------------------------
-modelType = 'RLDDM'
-source(file.path(workDir, 'analysis/fittingFunctions.R'))
-exp <- 'exp3'
+modelType = 'softmax'
+source(file.path(workDir, 'analysis/src/fittingFunctions.R'))
+exp <- 'exp2'
 resDir <- file.path(workDir, 'fits', 'Barbara', exp, paste0('model-', modelType))
 dir.create(resDir, showWarnings = FALSE, recursive=TRUE)
 
 # Load data
 load(file.path(dataDir, paste0('data_', exp, '.Rdata')))
-block <- 'Trialwise'
+block <- 'Miniblocks'
 ppsToFit <- unique(dat$pp)
-modelsToFit <- 1:4
+modelsToFit <- paste(1:4, 'sm', sep='') #c('1Qst0', '2Qst0', '3Qst0', '4Qst0')
 
 # Collect all parameters --------------------------------------------------
 ## Get all parameters, mean RT and mean accuracy into single dataframe
@@ -33,7 +33,7 @@ for(modelN in modelsToFit) {
     # load data
     thisPpDat <- dat[dat$pp==pp&as.character(dat$Block)==block,]
     if(nrow(thisPpDat) == 0) next
-    d = prepareForFitting(thisPpDat)    
+    d = prepareForFitting(thisPpDat)
     df=d$df
     outcomes=d$outcomes
     VVchoiceIdx=d$VVchoiceIdx
@@ -44,16 +44,16 @@ for(modelN in modelsToFit) {
     modelFn = file.path(resDir, paste0('sub-', pp, '_model-', modelN, '_', block, '.rdat'))
     load(modelFn)
     names(bestPars) <- modelSetup$p.vector
-    fitModel <- objRLDDMMultiCond(bestPars,
-                               rt=df$rt,
-                               parNames=modelSetup$p.vector,
-                               constants=modelSetup$constants,
-                               choice=choice,
-                               condition=df$cue,
-                               values=values,
-                               outcomes=outcomes,
-                               VVchoiceIdx=VVchoiceIdx,
-                               returnType='full')
+    fitModel <- obj(bestPars,
+                     rt=df$rt,
+                     parNames=modelSetup$p.vector,
+                     constants=modelSetup$constants,
+                     choice=choice,
+                     condition=df$cue,
+                     values=values,
+                     outcomes=outcomes,
+                     VVchoiceIdx=VVchoiceIdx,
+                     returnType='full')
     df$EVchoice <- fitModel$VV[,1]-fitModel$VV[,2]
     df$modelChoice <- ifelse(df$EVchoice > 0, 2, 1)
     # "subjective" accuracy: choice in line with highest EV-stimulus
@@ -77,8 +77,14 @@ for(modelN in modelsToFit) {
     # get LL and parameters
     fit[idx1, 'negLL'] <- -fitModel$LL
     names(bestPars) <- modelSetup$p.vector
-    fit[idx1, 't0'] <- bestPars[['t0']]
-    fit[idx1, 'm'] <- bestPars[['m']]
+    for(parName in c('t0', 'm')) {
+      if(parName %in% names(bestPars)) fit[idx1, parName] <- bestPars[[parname]]
+    }
+    if('beta' %in% names(bestPars)) bestPars[['a']] <- bestPars[['beta']]
+    if('beta.SPD' %in% names(bestPars)) bestPars[['a.SPD']] <- bestPars[['beta.SPD']]
+    if('beta.ACC' %in% names(bestPars)) bestPars[['a.ACC']] <- bestPars[['beta.ACC']]
+    #    fit[idx1, 't0'] <- bestPars[['t0']]
+#    fit[idx1, 'm'] <- bestPars[['m']]
     fit[idx1, 'nPars'] <- length(bestPars)
     if(modelN == 1) {
       fit[idx1, 'eta1'] <- bestPars[['eta1']]
